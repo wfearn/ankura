@@ -11,6 +11,30 @@ try:
 except ImportError:
     jit = lambda x:x
 
+def create_amazon_modified(corpus_size):
+    download_dir = os.path.join(os.getenv('HOME'), '.ankura')
+    amazon_large = os.path.join(download_dir, 'amazon_large/amazon_large.json.gz')
+
+    import gzip
+
+    amazon_modified = list()
+
+    with gzip.open(amazon_large) as al:
+        for i, line in enumerate(al):
+            if i < corpus_size:
+                amazon_modified.append(line)
+            else:
+                to_replace = np.random.randint(0, i)
+                if to_replace < corpus_size:
+                    amazon_modified[to_replace] = line
+
+    amazon_modified_filepath = os.path.join(download_dir, 'amazon_modified/amazon_modified.json.gz')
+
+    if not os.path.exists(os.path.dirname(amazon_modified_filepath)):
+        os.mkdir(os.path.dirname(amazon_modified_filepath))
+
+    with gzip.open(amazon_modified_filepath, 'wb') as am:
+        am.write(b''.join(amazon_modified))
 
 def random_projection(A, k):
     """Randomly projects the points (rows) of A into k-dimensions.

@@ -3,13 +3,11 @@
 import collections
 import functools
 import sys
-import collections
 
 import numpy as np
 import scipy.spatial
 import sklearn.decomposition
 import gensim
-import tqdm
 
 from math import log, exp
 from . import pipeline, util
