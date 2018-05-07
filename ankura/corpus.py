@@ -329,9 +329,9 @@ def yelp():
                 'rating',
             ),
         ),
-        pipeline.length_filterer(30),
+        pipeline.length_filterer(),
     )
-    p.tokenizer = pipeline.frequency_tokenizer(p, 50)
+    p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('yelp.pickle'))
 
 def amazon():
