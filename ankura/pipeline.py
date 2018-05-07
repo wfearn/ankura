@@ -21,6 +21,7 @@ import pickle
 import re
 import string
 import tarfile
+import random
 
 import bs4
 import scipy.sparse
@@ -32,6 +33,8 @@ Text = collections.namedtuple('Text', 'name data')
 TokenLoc = collections.namedtuple('TokenLoc', 'token loc')
 Document = collections.namedtuple('Document', 'text tokens metadata')
 Corpus = collections.namedtuple('Corpus', 'documents vocabulary metadata')
+
+HashPrimes = [1009, 1231, 1381, 3307, 4463, 5717, 6277, 7177, 7919, 6337, 5659]
 
 # Inputers are callables which generate the files a Pipeline should read.
 # The files should be opened in binary read mode. The caller is reponsible for
@@ -495,9 +498,11 @@ class HashedVocabBuilder(VocabBuilder):
         self.size = size
         self.indices = {}
 
+        self.offset = random.choice(HashPrimes)
+
     def __getitem__(self, token):
         if token not in self.types:
-            key = hash(token) % self.size
+            key = (hash(token) + self.offset) % self.size
             if key not in self.indices:
                 self.indices[key] = len(self.buckets)
                 self.buckets.append(collections.defaultdict(int))
@@ -593,6 +598,33 @@ class Pipeline(object):
             pickle.dump(corpus, open(pickle_path, 'wb'))
         return corpus
 
+def hash_existing_corpus(corpus, vocab_size, run_number):
+    corpus_name = 'amazon_large_vocab' + str(vocab_size) + 'run' + str(run_number)
+    doc_path = '/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/' + corpus_name + '.docs.pickle'
+    pickle_path = '/fslhome/wfearn/compute/.ankura/' + corpus_name + '.corpus.pickle'
+
+    print('Corpus pickle', pickle_path)
+    print('Doc pickle', doc_path)
+
+    if pickle_path and os.path.exists(pickle_path):
+        return pickle.load(open(pickle_path, 'rb'))
+
+    documents = DocumentStream(doc_path)
+    vocab_hasher = HashedVocabBuilder(vocab_size)
+
+    for doc in corpus.documents:
+        tokens = [ TokenLoc(corpus.vocabulary[t.token], t.loc) for t in doc.tokens ]
+        types = vocab_hasher.convert(tokens)
+        metadata = doc.metadata
+
+        doc = Document(doc.text, types, metadata)
+        documents.append(doc)
+
+    new_corpus = Corpus(documents, vocab_hasher.tokens, corpus.metadata)
+
+    pickle.dump(new_corpus, open(pickle_path, 'wb'))
+
+    return new_corpus
 
 def build_docwords(corpus, V=None):
     """Constructs a sparse docwords matrix from a corpus.
