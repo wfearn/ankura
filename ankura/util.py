@@ -12,7 +12,7 @@ except ImportError:
     jit = lambda x:x
 
 def create_amazon_modified(corpus_size):
-    download_dir = os.path.join(os.getenv('HOME'), '.ankura')
+    download_dir = os.path.join(os.getenv('HOME'), 'compute/.ankura')
     amazon_large = os.path.join(download_dir, 'amazon_large/amazon_large.json.gz')
 
     import gzip
