@@ -99,6 +99,8 @@ def build_labeled_cooccurrence(corpus, attr_name, labeled_docs,
     D = 0
     for d, doc in enumerate(corpus.documents):
         n_d = len(doc.tokens)
+        if n_d <= 1:
+            continue
         D += 1
 
         if d in labeled_docs:
@@ -148,12 +150,10 @@ def build_supervised_cooccurrence(corpus, attr_name, labeled_docs):
     S = np.zeros((V, K))
     for d, doc in enumerate(corpus.documents):
         if d in labeled_docs:
-            index = label_set[doc.metadata[attr_name]]
+            label_index = label_set[doc.metadata[attr_name]]
             for i, w_i in enumerate(doc.tokens):
-                for j, w_j in enumerate(doc.tokens):
-                    if i == j:
-                        continue
-                    S[w_i.token, index] += 1
+                S[w_i.token, label_index] += 1
+
     for i in range(S.shape[0]):
 
         row_sum = np.sum(S[i,:])
@@ -398,5 +398,5 @@ def recover_topics(Q, anchors, epsilon=2e-6, **kwargs):
         A[:, k] = A[:, k] / A[:, k].sum()
 
     if kwargs.get('get_c'):
-        return C, A
+        return C.transpose(), A
     return A
