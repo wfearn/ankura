@@ -115,7 +115,7 @@ def build_labeled_cooccurrence(corpus, attr_name, labeled_docs,
                 Q[index, w_i.token] += label_weight * norm
             Q[index, index] += label_weight * (label_weight - 1) * norm
         else:
-            norm = 1 / (n_d * (n_d + 2 * K * smoothing - 1) + K * (K * smoothing - smoothing))
+            norm = 1 / (n_d * (n_d - 1) + 2 * n_d * K * smoothing + K * (K - 1) * smoothing**2)
             for i, w_i in enumerate(doc.tokens):
                 for j, w_j in enumerate(doc.tokens):
                     if i == j:
@@ -128,7 +128,7 @@ def build_labeled_cooccurrence(corpus, attr_name, labeled_docs,
                 for j in label_set.values():
                     if i == j:
                         continue
-                    Q[i, j] += norm * smoothing ** 2
+                    Q[i, j] += norm * smoothing**2
 
     return Q / D, sorted(label_set, key=label_set.get)
 
@@ -150,14 +150,16 @@ def build_supervised_cooccurrence(corpus, attr_name, labeled_docs):
     S = np.zeros((V, K))
     for d, doc in enumerate(corpus.documents):
         if d in labeled_docs:
-            index = label_set[doc.metadata[attr_name]]
+            label_index = label_set[doc.metadata[attr_name]]
             for i, w_i in enumerate(doc.tokens):
-                for j, w_j in enumerate(doc.tokens):
-                    if i == j:
-                        continue
-                    S[w_i.token, index] += 1
+                S[w_i.token, label_index] += 1
+
     for i in range(S.shape[0]):
-        S[i,:] /= np.sum(S[i,:])
+
+        row_sum = np.sum(S[i,:])
+        if row_sum == 0:
+            continue
+        S[i,:] /= row_sum
 
     return np.hstack((Q, S))
 
@@ -395,4 +397,6 @@ def recover_topics(Q, anchors, epsilon=2e-6, **kwargs):
     for k in range(K):
         A[:, k] = A[:, k] / A[:, k].sum()
 
-    return A;
+    if kwargs.get('get_c'):
+        return C.transpose(), A
+    return A

@@ -1,3 +1,5 @@
 numpy
+bs4
+gensim
 scipy
 scikit-learn

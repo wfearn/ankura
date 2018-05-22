@@ -9,6 +9,7 @@ import scipy.spatial
 import sklearn.decomposition
 import gensim
 
+from math import log, exp
 from . import pipeline, util
 
 
@@ -124,19 +125,13 @@ def gensim_assign(corpus, topics, theta_attr=None, z_attr=None):
     lda.sync_state()
 
     # Make topic assignments
-    doc_topics = lda.get_document_topics(bows, per_word_topics=True)
-    for doc, (sparse_theta, sparse_z, _) in zip(corpus.documents, doc_topics):
+    for doc, bow in zip(corpus.documents, bows):
+        gamma, phi = lda.inference([bow], collect_sstats=z_attr)
         if theta_attr:
-            theta = np.zeros(K)
-            for topic, prob in sparse_theta:
-                theta[topic] = prob
-            theta /= theta.sum()
-            doc.metadata[theta_attr] = theta
+            doc.metadata[theta_attr] = gamma[0] / gamma[0].sum()
         if z_attr:
-            sparse_z= {word: topics[0] for word, topics in sparse_z}
-            z = [sparse_z[t.token] for t in doc.tokens]
-            doc.metadata[z_attr] = z
-
+            w = [t.token for t in doc.tokens]
+            doc.metadata[z_attr] = phi.argmax(axis=0)[w].tolist()
 
 def cross_reference(corpus, attr, doc=None, n=sys.maxsize, threshold=1):
     """Finds the nearest documents by topic similarity.
@@ -199,6 +194,27 @@ def free_classifier(topics, Q, labels, epsilon=1e-7):
         return labels[np.argmax(topic_score + word_score)]
     return _classifier
 
+def free_classifier_derpy(topics, Q, labels, epsilon=1e-7):
+    """same as function above, with a few minor math fixes"""
+    K = len(labels)
+    V = Q.shape[0] - K
+
+    # Smooth and column normalize class-topic weights
+    A_f = topics[-K:] + epsilon
+    A_f /= A_f.sum(axis=0)
+
+    # class_given_word
+    Q = Q / Q.sum(axis=1, keepdims=True) # row-normalize Q without original
+    Q_L = Q[:V, -K:]
+
+    @functools.wraps(free_classifier)
+    def _classifier(doc, attr='theta'):
+
+        topic_score = A_f.dot(doc.metadata[attr])
+        topic_score /= topic_score.sum(axis=0)
+
+        return labels[np.argmax(topic_score)]
+    return _classifier
 
 def free_classifier_revised(topics, Q, labels, epsilon=1e-7):
     """same as function above, with a few minor math fixes"""
@@ -232,15 +248,160 @@ def free_classifier_revised(topics, Q, labels, epsilon=1e-7):
     return _classifier
 
 
-def highlight(doc, z_attr, highlighter=lambda w, z: '{}:{}'.format(w, z)):
-    chunks = []
-    curr = 0
+def free_classifier_line_not_gibbs(corpus, attr_name, labeled_docs,
+                            topics, C, labels, epsilon=1e-7):
 
-    for token, topic in zip(doc.tokens, doc.metadata[z_attr]):
-        start, end = token.loc
-        chunks.append(doc.text[curr:start])
-        chunks.append(highlighter(doc.text[start:end], topic))
-        curr = end
-    chunks.append(doc.text[curr:])
+    K = len(labels)
 
-    return ''.join(chunks)
+    # Smooth and column normalize class-topic weights
+    A_f = topics[-K:] + epsilon
+    A_f /= A_f.sum(axis=0)
+
+    # column normalize topic-label matrix
+    C_f = C[0:, -K:]
+    C_f /= C_f.sum(axis=0)
+
+    L = np.zeros(K)
+    for d, doc in enumerate(corpus.documents):
+        if d in labeled_docs:
+            label_name = doc.metadata[attr_name]
+            i = labels.index(label_name)
+            L[i] += 1
+
+    L = L / L.sum(axis=0) # normalize L to get the label probabilities
+
+    @functools.wraps(free_classifier)
+    def _classifier(doc, attr='z'):
+        final_score = np.zeros(K)
+        for i, l in enumerate(L):
+            product = l
+            doc_topic_count = collections.Counter(doc.metadata[attr])
+            for topic, count in doc_topic_count.items():
+                product *= C_f[topic, i]**count
+
+            final_score[i] = product
+
+        return labels[np.argmax(final_score)]
+    return _classifier
+
+
+def free_classifier_dream(corpus, attr_name, labeled_docs,
+                            topics, C, labels, epsilon=1e-7):
+    L = len(labels)
+
+    # column-normalized word-topic matrix without labels
+    A_w = topics[:-L]
+    A_w /= A_w.sum(axis=0)
+
+    _, K = A_w.shape # K is number of topics
+
+    # column normalize topic-label matrix
+    C_f = C[:, -L:]
+    C_f /= C_f.sum(axis=0)
+
+    phi = np.zeros(L) # emperically observe labels
+    for d, doc in enumerate(corpus.documents):
+        if d in labeled_docs:
+            label_name = doc.metadata[attr_name];
+            i = labels.index(label_name)
+            phi[i] += 1
+    phi = phi / phi.sum(axis=0) # normalize phi to get the label probabilities
+    log_phi = np.log(phi)
+
+    @functools.wraps(free_classifier)
+    def _classifier(doc):
+        results = np.copy(log_phi)
+        for l in range(L):
+            for n, w_i in enumerate(doc.tokens):
+                m = sum(C_f[t, l] * A_w[w_i.token, t] for t in range(K))
+                if m != 0: # this gets rid of log(0) warning, but essentially does the same thing as taking log(0)
+                    results[l] += np.log(m)
+                else:
+                    results[l] = float('-inf')
+
+
+        return labels[np.argmax(results)]
+    return _classifier
+
+
+def free_classifier_line_model(corpus, attr_name, labeled_docs,
+                                    topics, C, labels, epsilon=1e-7, num_iters=10):
+
+    L = len(labels)
+
+    # column-normalized word-topic matrix without labels
+    A = topics[:-L]
+    A /= A.sum(axis=0)
+
+    _, K = A.shape # K is number of topics
+
+    # column normalize topic-label matrix
+    C_f = C[0:, -L:]
+    C_f /= C_f.sum(axis=0)
+
+    phi = np.zeros(L) # emperically observe labels
+    for d, doc in enumerate(corpus.documents):
+        if d in labeled_docs:
+            label_name = doc.metadata[attr_name];
+            i = labels.index(label_name)
+            phi[i] += 1
+    phi = phi / phi.sum(axis=0) # normalize phi to get the label probabilities
+
+    @functools.wraps(free_classifier)
+    def _classifier(doc):
+        l = np.random.randint(L)
+        z = np.random.randint(K, size=len(doc.tokens))
+
+        for _ in range(num_iters):
+            doc_topic_count = collections.Counter(z) # maps topic assignments to counts (this used to be outside of the for loop)
+            l_cond = np.log(phi) # not in log space: cond = phi
+            for s in range(L):
+                for topic, count in doc_topic_count.items():
+                    l_cond[s] += count * np.log(C_f[topic, s]) # not in log space: cond[s] *= C_f[topic, s]**count
+            l = util.sample_log_categorical(l_cond)
+
+            for n, w_n in enumerate(doc.tokens):
+                doc_topic_count[z[n]] -= 1
+                z_cond = C_f[:K,l] * A[w_n.token,:K] # z_cond = [C_f[t, l] * A[w_n.token, t] for t in range(K)] # eq 2
+                z[n] = util.sample_categorical(z_cond)
+                doc_topic_count[z[n]] += 1
+
+        return labels[l]
+    return _classifier
+
+
+def free_classifier_v_model(corpus, attr_name, labeled_docs,
+                                    topics, labels, epsilon=1e-7, num_iters=100):
+
+    L = len(labels)
+
+    # column-normalized word-topic matrix without labels
+    A = topics[:-L]
+    A /= A.sum(axis=0)
+
+    _, K = A.shape # K is number of topics
+
+    # Smooth and column normalize class-topic weights
+    A_f = topics[-L:] + epsilon
+    A_f /= A_f.sum(axis=0)
+
+    @functools.wraps(free_classifier)
+    def _classifier(doc):
+        l = np.random.randint(L)
+        z = np.random.randint(K, size=len(doc.tokens))
+
+        for _ in range(num_iters):
+            doc_topic_count = collections.Counter(z) # maps topic assignments to counts
+            l_cond = [sum(A_f[x, topic]*count for topic, count in doc_topic_count.items()) for x in range(L)]
+
+            l = util.sample_categorical(l_cond)
+            B = l_cond[l] # B is a constant (summation of A_f[l, z_i])
+
+            for n, w_n in enumerate(doc.tokens):
+                B -= A_f[l, z[n]]
+                z_cond = [A[w_n.token, t] * (A_f[l, t] + B) for t in range(K)]
+                z[n] = util.sample_categorical(z_cond)
+                B += A_f[l, z[n]]
+
+        return labels[l]
+    return _classifier

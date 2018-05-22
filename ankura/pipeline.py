@@ -22,6 +22,7 @@ import re
 import string
 import tarfile
 import random
+import time
 
 import bs4
 import scipy.sparse
@@ -645,7 +646,12 @@ def build_docwords(corpus, V=None):
     return docwords.tocsc()
 
 
-def test_train_split(corpus, num_train=None, num_test=None, **kwargs):
+def test_train_split(corpus, num_train=None, num_test=None, random_seed=None, **kwargs):
+
+    if not random_seed:
+        random_seed = time.time()
+    np.random.seed(random_seed)
+
     if not num_train and not num_test:
         num_train = int(len(corpus.documents) * .8)
         num_test = len(corpus.documents) - num_train
