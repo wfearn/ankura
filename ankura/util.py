@@ -11,9 +11,13 @@ try:
 except ImportError:
     jit = lambda x:x
 
-def create_amazon_modified(corpus_size):
+def create_amazon_modified(corpus_size, run_number):
     download_dir = os.path.join(os.getenv('HOME'), 'compute/.ankura')
     amazon_large = os.path.join(download_dir, 'amazon_large/amazon_large.json.gz')
+
+    amazon_modified_filepath = os.path.join(download_dir, f'amazon_modified/amazon_modified_{corpus_size}_{run_number}.json.gz')
+
+    if os.path.isfile(amazon_modified_filepath): return
 
     import gzip
 
@@ -27,11 +31,6 @@ def create_amazon_modified(corpus_size):
                 to_replace = np.random.randint(0, i)
                 if to_replace < corpus_size:
                     amazon_modified[to_replace] = line
-
-    amazon_modified_filepath = os.path.join(download_dir, 'amazon_modified/amazon_modified.json.gz')
-
-    if not os.path.exists(os.path.dirname(amazon_modified_filepath)):
-        os.mkdir(os.path.dirname(amazon_modified_filepath))
 
     with gzip.open(amazon_modified_filepath, 'wb') as am:
         am.write(b''.join(amazon_modified))

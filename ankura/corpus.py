@@ -248,12 +248,12 @@ def newsgroups():
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('newsgroups.pickle'))
 
-def amazon_modified(corpus_size=1000000, vocab_size=None):
+def amazon_modified(corpus_size=1000000, vocab_size=None, run_number=0, rare=None):
     """Gets a corpus containing a number Amazon product reviews 
     equal to corpus_size, with star ratings. """
 
     from .util import create_amazon_modified
-    create_amazon_modified(corpus_size)
+    create_amazon_modified(corpus_size, run_number)
 
     label_stream = BufferedStream()
 
@@ -268,7 +268,7 @@ def amazon_modified(corpus_size=1000000, vocab_size=None):
             yield pipeline.Text(str(i), line[value_key])
 
     p = pipeline.Pipeline(
-        download_inputer('amazon_modified/amazon_modified.json.gz'),
+        download_inputer(f'amazon_modified/amazon_modified_{corpus_size}_{run_number}.json.gz'),
         pipeline.gzip_extractor(label_extractor),
         pipeline.stopword_tokenizer(
             pipeline.default_tokenizer(),
@@ -278,8 +278,8 @@ def amazon_modified(corpus_size=1000000, vocab_size=None):
         pipeline.length_filterer(),
     )
 
-    p.tokenizer = pipeline.frequency_tokenizer(p)
-    return p.run(_path('amazon_modified.pickle'), hash_size=vocab_size)
+    p.tokenizer = pipeline.frequency_tokenizer(p, rare=rare)
+    return p.run(_path(f'amazon_modified_{corpus_size}_{run_number}.pickle'), hash_size=vocab_size)
 
 def amazon_large():
     """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
