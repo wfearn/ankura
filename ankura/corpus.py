@@ -198,15 +198,10 @@ def toy():
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('toy.pickle'))
 
-def newsgroups(hash_size=None, rare_word_filter=80, common_word_filter=2000, dir_prefix=None):
+def newsgroups():
     """Gets a Corpus containing roughly 20,000 usenet postings from 20
     different newsgroups in the early 1990's.
     """
-
-    base_file = 'newsgroups{}.pickle'
-    base_file = base_file.format('{}_rare' + str(rare_word_filter) + '_common' + str(common_word_filter))
-    base_file = base_file.format('_vocab' + str(hash_size)) if hash_size else base_file.format('')
-
     coarse_mapping = {
         'comp.graphics': 'comp',
         'comp.os.ms-windows.misc': 'comp',
@@ -250,8 +245,8 @@ def newsgroups(hash_size=None, rare_word_filter=80, common_word_filter=2000, dir
         ),
         pipeline.length_filterer(),
     )
-    p.tokenizer = pipeline.frequency_tokenizer(p, rare_word_filter, common_word_filter)
-    return p.run(_path(base_file), hash_size=hash_size)
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('newsgroups.pickle'))
 
 def amazon_modified(corpus_size=1000000, vocab_size=None):
     """Gets a corpus containing a number Amazon product reviews 
@@ -286,15 +281,9 @@ def amazon_modified(corpus_size=1000000, vocab_size=None):
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('amazon_modified.pickle'), hash_size=vocab_size)
 
-def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir_prefix=None):
+def amazon_large():
     """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
     """
-
-    pickle_file = 'amazon_large{}.corpus.pickle'
-    pickle_file = pickle_file.format('{}_vocab' + str(hash_size)) if hash_size else pickle_file.format('{}')
-    pickle_file = pickle_file.format('_rare' + str(rare_word_filter)) if rare_word_filter else pickle_file.format('')
-
-    print('Pickle file name is:', pickle_file)
 
     label_stream = BufferedStream()
 
@@ -316,15 +305,11 @@ def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir
             open_download('stopwords/english.txt'),
         ),
         pipeline.stream_labeler(label_stream),
-        pipeline.length_filterer(),
+        pipeline.length_filterer(30),
     )
 
-    doc_stream = dir_prefix + '/amazon_large{}.docs.pickle' if dir_prefix else '/var/tmp/amazon_large{}.docs.pickle'
-    doc_stream = doc_stream.format('{}_vocab' + str(hash_size)) if hash_size else doc_stream.format('{}') 
-    doc_stream = doc_stream.format('_rare' + str(rare_word_filter)) if rare_word_filter else doc_stream.format('')
-
-    p.tokenizer = pipeline.frequency_tokenizer(p, rare=rare_word_filter) if rare_word_filter else pipeline.frequency_tokenizer(p)
-    return p.run(_path(pickle_file), doc_stream, hash_size)
+    p.tokenizer = pipeline.frequency_tokenizer(p, 50)
+    return p.run(_path('amazon_large.pickle'), docs_path='/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/amazon_large.docs.pickle')
 
 def amazon_medium():
     """Gets a corpus containing 100,000 Amazon product reviews, with star ratings.
@@ -354,36 +339,6 @@ def amazon_medium():
 
     p.tokenizer = pipeline.frequency_tokenizer(p, 100, 2000)
     return p.run(_path('amazon_medium.pickle'))
-
-def yelp():
-    """Gets a corpus containing roughly 25,000 yelp restaurant reviews, with ratings."""
-
-    binary_mapping = { # How do I use this?
-            5 : 5,
-            4 : 0,
-            3 : 0,
-            2 : 0,
-            1 : 0
-    }
-
-    p = pipeline.Pipeline(
-        download_inputer('yelp/yelp.txt'),
-        pipeline.line_extractor('\t'),
-        pipeline.stopword_tokenizer(
-            pipeline.default_tokenizer(),
-            open_download('stopwords/english.txt'),
-        ),
-        pipeline.composite_labeler(
-            pipeline.title_labeler('id'),
-            pipeline.float_labeler(
-                open_download('yelp/yelp.response'),
-                'rating',
-            ),
-        ),
-        pipeline.length_filterer(),
-    )
-    p.tokenizer = pipeline.frequency_tokenizer(p)
-    return p.run(_path('yelp.pickle'))
 
 def amazon():
     """Gets a Corpus containing roughly 40,000 Amazon product reviews, with
