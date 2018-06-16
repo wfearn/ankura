@@ -603,9 +603,9 @@ class Pipeline(object):
         return corpus
 
 def hash_existing_corpus(corpus, vocab_size, run_number):
-    corpus_name = 'amazon_large_vocab' + str(vocab_size) + 'run' + str(run_number)
-    doc_path = '/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/' + corpus_name + '.docs.pickle'
-    pickle_path = '/fslhome/wfearn/compute/.ankura/' + corpus_name + '.corpus.pickle'
+    corpus_name = f'amazon_modified_vocab_{vocab_size}_run_{run_number}'
+    doc_path = f'/fslhome/wfearn/compute/amazon_modified/amazon_modified_corpora/{corpus_name}.docs.pickle'
+    pickle_path = f'/fslhome/wfearn/compute/.ankura/{corpus_name}.corpus.pickle'
 
     print('Corpus pickle', pickle_path)
     print('Doc pickle', doc_path)
@@ -628,7 +628,7 @@ def hash_existing_corpus(corpus, vocab_size, run_number):
 
     pickle.dump(new_corpus, open(pickle_path, 'wb'))
 
-    return new_corpus
+    return doc_path, pickle_path, new_corpus
 
 def build_docwords(corpus, V=None):
     """Constructs a sparse docwords matrix from a corpus.

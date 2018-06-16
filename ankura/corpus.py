@@ -248,7 +248,7 @@ def newsgroups():
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('newsgroups.pickle'))
 
-def amazon_modified(corpus_size=1000000, vocab_size=None, run_number=0, rare=None):
+def amazon_modified(corpus_size=10000000, vocab_size=None, rare=100, run_number=0):
     """Gets a corpus containing a number Amazon product reviews 
     equal to corpus_size, with star ratings. """
 
@@ -279,9 +279,12 @@ def amazon_modified(corpus_size=1000000, vocab_size=None, run_number=0, rare=Non
     )
 
     p.tokenizer = pipeline.frequency_tokenizer(p, rare=rare)
-    return p.run(_path(f'amazon_modified_{corpus_size}_{run_number}.pickle'), hash_size=vocab_size)
 
-def amazon_large():
+    corpus_path = _path(f'amazon_modified_{corpus_size}_{run_number}.pickle')
+    docs_path = _path(f'amazon_modified_{corpus_size}_{run_number}.docs.pickle')
+    return corpus_path, docs_path, p.run(corpus_path, hash_size=vocab_size, docs_path=docs_path)
+
+def amazon_large(run_number=0, vocab_size=10000):
     """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
     """
 
@@ -305,11 +308,13 @@ def amazon_large():
             open_download('stopwords/english.txt'),
         ),
         pipeline.stream_labeler(label_stream),
-        pipeline.length_filterer(30),
+        pipeline.length_filterer(),
     )
 
-    p.tokenizer = pipeline.frequency_tokenizer(p, 50)
-    return p.run(_path('amazon_large.pickle'), docs_path='/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/amazon_large.docs.pickle')
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    corpus_path = _path(f'amazon_large_{vocab_size}_{run_number}.pickle')
+    docs_path = _path(f'amazon_large_{vocab_size}_{run_number}.docs.pickle')
+    return corpus_path, docs_path, p.run(corpus_path, hash_size=vocab_size, docs_path=docs_path)
 
 def amazon_medium():
     """Gets a corpus containing 100,000 Amazon product reviews, with star ratings.
