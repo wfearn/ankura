@@ -27,6 +27,13 @@ import bs4
 import scipy.sparse
 import numpy as np
 
+from . import corpus
+
+try:
+    import symspell
+except ImportError:
+    pass
+
 # POD types used throughout the pipeline process
 
 Text = collections.namedtuple('Text', 'name data')
@@ -193,6 +200,15 @@ def default_tokenizer():
     """
     return translate_tokenizer(split_tokenizer())
 
+def spelling_tokenizer(base_tokenizer):
+    """Transforms the output of another tokenizer by running spell correction on all tokens.
+    """
+    sp = SpellCorrector()
+    def _tokenizer(data):
+        tokens = base_tokenizer(data)
+        tokens = sp.correct_tokens(tokens)
+        return tokens
+    return _tokenizer
 
 def regex_tokenizer(base_tokenizer, pattern, repl):
     """Transforms the output of another tokenizer by replacing all tokens which
@@ -467,6 +483,27 @@ def composite_informer(*informers):
 # inputer, extractor, tokenizer, and labeler. Optionally, it may also include
 # an informer.
 
+class SpellCorrector(object):
+    """Stores a spelling corrector implemented using jamspell"""
+
+    def __init__(self):
+        download_dir = os.path.join(os.getenv('HOME'), '.ankura/spell')
+        dictionary_file = os.path.join(download_dir, 'spelling_dictionary.pickle')
+
+        if not os.path.isfile(dictionary_file):
+            self.corrector = symspell.SymSpell()
+            self.corrector.create_dictionary('/local/reuters_text.txt')
+            with open(dictionary_file, 'wb') as f:
+                pickle.dump(self.corrector, f)
+
+        else:
+            with open(dictionary_file, 'rb') as f:
+                self.corrector = pickle.load(f)
+
+    def correct_tokens(self, tokens):
+        sentence = ' '.join([t.token for t in tokens])
+        suggestion = self.corrector.lookup_compound(sentence, 2)[0].term
+        return [TokenLoc(w, 0) for w in suggestion.split(' ')]
 
 class VocabBuilder(object):
     """Stores a bidirectional map of token to token ids"""

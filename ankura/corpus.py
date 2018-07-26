@@ -159,9 +159,11 @@ def yelp():
     p = pipeline.Pipeline(
         download_inputer('yelp/yelp.txt'),
         pipeline.line_extractor('\t'),
-        pipeline.stopword_tokenizer(
-            tokenizer,
-            open_download('stopwords/english.txt'),
+        pipeline.spelling_tokenizer(
+            pipeline.stopword_tokenizer(
+                tokenizer,
+                open_download('stopwords/english.txt'),
+            ),
         ),
         pipeline.composite_labeler(
             pipeline.title_labeler('id'),
@@ -213,7 +215,9 @@ def toy():
         pipeline.targz_extractor(
             pipeline.whole_extractor()
         ),
-        pipeline.default_tokenizer(),
+        pipeline.spelling_tokenizer(
+            pipeline.default_tokenizer()
+        ),
         pipeline.composite_labeler(
             pipeline.title_labeler('id'),
             pipeline.dir_labeler('directory')
@@ -255,13 +259,15 @@ def newsgroups():
         pipeline.targz_extractor(
             pipeline.skip_extractor(errors='replace'),
         ),
-        pipeline.remove_tokenizer(
-            pipeline.stopword_tokenizer(
-                pipeline.default_tokenizer(),
-                itertools.chain(open_download('stopwords/english.txt'),
-                                open_download('stopwords/newsgroups.txt'))
+        pipeline.spelling_tokenizer(
+            pipeline.remove_tokenizer(
+                pipeline.stopword_tokenizer(
+                    pipeline.default_tokenizer(),
+                    itertools.chain(open_download('stopwords/english.txt'),
+                                    open_download('stopwords/newsgroups.txt'))
+                ),
+                r'^(.{0,2}|.{15,})$', # remove any token t with len(t)<=2 or len(t)>=15
             ),
-            r'^(.{0,2}|.{15,})$', # remove any token t with len(t)<=2 or len(t)>=15
         ),
         pipeline.composite_labeler(
             pipeline.title_labeler('id'),
