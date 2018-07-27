@@ -648,7 +648,7 @@ def remove_nonexistent_train_words(train, test):
 
     return train, test
 
-def train_test_split(corpus, num_train=None, num_test=None, random_seed=None, remove_testonly_words=True, **kwargs):
+def train_test_split(corpus, num_train=None, num_test=None, random_seed=None, remove_testonly_words=True, save_dir=os.getcwd(), vocab_size='', test_name='test', train_name='train', **kwargs):
 
     if not random_seed:
         random_seed = time.time()
@@ -669,25 +669,39 @@ def train_test_split(corpus, num_train=None, num_test=None, random_seed=None, re
         test = Corpus([corpus.documents[d] for d in test_ids], corpus.vocabulary, corpus.metadata)
         if remove_testonly_words:
             train, test = remove_nonexistent_train_words(train, test)
-    except TypeError: # corpus doesn't support random indexing
-        sample_size = num_train + num_test
-        sample = []
-        doc_ids = []
+    except TypeError: # corpus doesn't support random indexing, note this only supports 80/20 splits currently
+        sample_size = num_train
 
         # reservoir sampling
-        for i, doc in enumerate(corpus.documents):
+        sample_ids = list()
+        doc_id_set = set(range(len(corpus.documents)))
+        for i in doc_id_set:
             if i < sample_size:
-                sample.append(doc)
-                doc_ids.append(i)
+                sample_ids.append(i)
 
             elif np.random.random() < (sample_size / i):
-                replace_index = np.random.randint(len(sample))
-                sample[replace_index] = doc
-                doc_ids[replace_index] = i
+                replace_index = np.random.randint(len(sample_ids))
+                sample_ids[replace_index] = i
+
+        train_ids = sample_ids
+        test_ids = list(doc_id_set.difference(set(sample_ids)))
+
+        test_docstream_path = f'{save_dir}/{test_name}{vocab_size}.docs.pickle'
+        train_docstream_path = f'{save_dir}/{train_name}{vocab_size}.docs.pickle'
+
+        test_docstream = DocumentStream(test_docstream_path)
+        train_docstream = DocumentStream(train_docstream_path)
+
+        sample_ids = set(sample_ids)
+        for i, doc in enumerate(corpus.documents):
+            if i in sample_ids:
+                train_docstream.append(doc)
+            else:
+                test_docstream.append(doc)
 
         train_ids, test_ids = doc_ids[:num_train], doc_ids[num_train:]
-        train = Corpus(sample[:num_train], corpus.vocabulary, corpus.metadata)
-        test = Corpus(sample[num_train:], corpus.vocabulary, corpus.metadata)
+        train = Corpus(train_docstream, corpus.vocabulary, corpus.metadata)
+        test = Corpus(test_docstream, corpus.vocabulary, corpus.metadata)
 
     if kwargs.get('return_ids'):
         return (train_ids, train), (test_ids, test)
