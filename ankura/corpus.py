@@ -302,14 +302,11 @@ def amazon_modified(corpus_size=1000000, vocab_size=None):
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('amazon_modified.pickle'), hash_size=vocab_size)
 
-def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir_prefix=None):
+def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir_prefix='/local/amazon_large'):
     """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
     """
-
-    pickle_file = 'amazon_large{}.corpus.pickle'
-    pickle_file = pickle_file.format('{}_vocab' + str(hash_size)) if hash_size else pickle_file.format('{}')
-    pickle_file = pickle_file.format('_rare' + str(rare_word_filter)) if rare_word_filter else pickle_file.format('')
-
+    amazon_name = f'amazon_large_{rare_word_filter}rare_{hash_size}hash'
+    pickle_file = f'{amazon_name}.corpus.pickle'
     print('Pickle file name is:', pickle_file)
 
     label_stream = BufferedStream()
@@ -319,7 +316,7 @@ def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir
         import json
 
         for i, line in enumerate(docfile):
-            line = json.loads(line.decode('utf-8'))    
+            line = json.loads(line.decode('utf-8'))
             label_stream.append(str(i), line[label_key])
 
             yield pipeline.Text(str(i), line[value_key])
@@ -327,20 +324,15 @@ def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir
     p = pipeline.Pipeline(
         download_inputer('amazon_large/amazon_large.json.gz'),
         pipeline.gzip_extractor(hingidy_jingidies),
-        pipeline.stopword_tokenizer(
-            pipeline.default_tokenizer(),
-            open_download('stopwords/english.txt'),
-        ),
+        pipeline.default_tokenizer(),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
     )
 
-    doc_stream = dir_prefix + '/amazon_large{}.docs.pickle' if dir_prefix else '/var/tmp/amazon_large{}.docs.pickle'
-    doc_stream = doc_stream.format('{}_vocab' + str(hash_size)) if hash_size else doc_stream.format('{}') 
-    doc_stream = doc_stream.format('_rare' + str(rare_word_filter)) if rare_word_filter else doc_stream.format('')
+    doc_stream = f'{dir_prefix}/{amazon_name}.docs.pickle'
 
     p.tokenizer = pipeline.frequency_tokenizer(p, rare=rare_word_filter) if rare_word_filter else pipeline.frequency_tokenizer(p)
-    return p.run(_path(pickle_file), doc_stream, hash_size)
+    return doc_stream, _path(pickle_file), p.run(_path(pickle_file), doc_stream, hash_size)
 
 def amazon_medium():
     """Gets a corpus containing 100,000 Amazon product reviews, with star ratings.
@@ -370,36 +362,6 @@ def amazon_medium():
 
     p.tokenizer = pipeline.frequency_tokenizer(p, 100, 2000)
     return p.run(_path('amazon_medium.pickle'))
-
-def yelp():
-    """Gets a corpus containing roughly 25,000 yelp restaurant reviews, with ratings."""
-
-    binary_mapping = { # How do I use this?
-            5 : 5,
-            4 : 0,
-            3 : 0,
-            2 : 0,
-            1 : 0
-    }
-
-    p = pipeline.Pipeline(
-        download_inputer('yelp/yelp.txt'),
-        pipeline.line_extractor('\t'),
-        pipeline.stopword_tokenizer(
-            pipeline.default_tokenizer(),
-            open_download('stopwords/english.txt'),
-        ),
-        pipeline.composite_labeler(
-            pipeline.title_labeler('id'),
-            pipeline.float_labeler(
-                open_download('yelp/yelp.response'),
-                'rating',
-            ),
-        ),
-        pipeline.length_filterer(),
-    )
-    p.tokenizer = pipeline.frequency_tokenizer(p)
-    return p.run(_path('yelp.pickle'))
 
 def amazon():
     """Gets a Corpus containing roughly 40,000 Amazon product reviews, with
