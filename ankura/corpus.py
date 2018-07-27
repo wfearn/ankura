@@ -302,10 +302,10 @@ def amazon_modified(corpus_size=1000000, vocab_size=None):
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('amazon_modified.pickle'), hash_size=vocab_size)
 
-def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir_prefix='/local/amazon_large'):
+def amazon_large(hash_size=0, dir_prefix='/local/amazon_large'):
     """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
     """
-    amazon_name = f'amazon_large_{rare_word_filter}rare_{hash_size}hash'
+    amazon_name = f'amazon_large_{hash_size}hash'
     pickle_file = f'{amazon_name}.corpus.pickle'
     print('Pickle file name is:', pickle_file)
 
@@ -317,7 +317,7 @@ def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir
 
         for i, line in enumerate(docfile):
             line = json.loads(line.decode('utf-8'))
-            label_stream.append(str(i), line[label_key])
+            label_stream.append((str(i), line[label_key]))
 
             yield pipeline.Text(str(i), line[value_key])
 
@@ -331,7 +331,7 @@ def amazon_large(hash_size=0, rare_word_filter=80, common_word_filter=20000, dir
 
     doc_stream = f'{dir_prefix}/{amazon_name}.docs.pickle'
 
-    p.tokenizer = pipeline.frequency_tokenizer(p, rare=rare_word_filter) if rare_word_filter else pipeline.frequency_tokenizer(p)
+    p.tokenizer = pipeline.frequency_tokenizer(p)
     return doc_stream, _path(pickle_file), p.run(_path(pickle_file), doc_stream, hash_size)
 
 def amazon_medium():
