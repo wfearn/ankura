@@ -7,6 +7,7 @@ import numpy as np
 import scipy.spatial
 import sklearn.decomposition
 import gensim
+import collections
 
 from math import log, exp
 from . import pipeline, util
@@ -119,15 +120,19 @@ def gensim_assign(corpus, topics, theta_attr=None, z_attr=None, needs_assign=Non
     lda.state.sstats = topics.astype(lda.dtype).T
     lda.sync_state()
 
+    thetas = dict()
+
     # Make topic assignments
     for d, (doc, bow) in enumerate(zip(corpus.documents, bows)):
         if needs_assign is None or d in needs_assign:
             gamma, phi = lda.inference([bow], collect_sstats=z_attr)
             if theta_attr:
-                doc.metadata[theta_attr] = gamma[0] / gamma[0].sum()
+                thetas[d] = gamma[0] / gamma[0].sum()
             if z_attr:
                 w = [t.token for t in doc.tokens]
                 doc.metadata[z_attr] = phi.argmax(axis=0)[w].tolist()
+
+    return thetas
 
 def cross_reference(corpus, attr, doc=None, n=sys.maxsize, threshold=1):
     """Finds the nearest documents by topic similarity.
