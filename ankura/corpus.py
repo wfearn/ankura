@@ -13,6 +13,7 @@ import functools
 import itertools
 import os
 import urllib.request
+import sys
 
 from . import pipeline
 import posixpath
@@ -20,8 +21,10 @@ import posixpath
 download_dir = os.path.join(os.getenv('HOME'), 'compute/.ankura')
 base_url = 'https://github.com/wfearn/data/raw/data2'
 
+
 def _path(name):
     return os.path.join(download_dir, name)
+
 
 def _url(name):
     return posixpath.join(base_url, name)
@@ -67,6 +70,7 @@ def download_inputer(*names):
         for name in names:
             yield open_download(name, mode='rb')
     return _inputer
+
 
 def tripadvisor():
     """Gets a corpus containing hotel reviews on trip advisor with ~240,000 documents"""
@@ -120,24 +124,24 @@ def yelp():
     def strip_non_alpha(token):
         return ''.join(c for c in token if c.isalnum())
 
+
     def tokenizer(data):
         tokens = base_tokenzer(data)
         tokens = [pipeline.TokenLoc(strip_non_alpha(t.token), t.loc) for t in tokens]
         tokens = [t for t in tokens if t.token]
         return tokens
 
+
     def binary_labeler(data, threshold, attr='label', delim='\t'):
         stream = (line.rstrip(os.linesep).split(delim, 1) for line in data)
         stream = ((key, float(value) >= threshold) for key, value in stream)
         return pipeline.stream_labeler(stream, attr)
 
+
     p = pipeline.Pipeline(
         download_inputer('yelp/yelp.txt'),
         pipeline.line_extractor('\t'),
-        pipeline.stopword_tokenizer(
-            tokenizer,
-            open_download('stopwords/english.txt'),
-        ),
+        tokenizer,
         pipeline.composite_labeler(
             pipeline.title_labeler('id'),
             pipeline.float_labeler(
@@ -182,6 +186,7 @@ def bible():
     p.tokenizer = pipeline.frequency_tokenizer(p, 2)
     return p.run(_path('bible.pickle'))
 
+
 def toy():
     p = pipeline.Pipeline(
         download_inputer('toy/toy.tar.gz'),
@@ -197,6 +202,21 @@ def toy():
     )
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('toy.pickle'))
+
+
+def nyt():
+    p = pipeline.Pipeline(
+        download_inputer('nyt/nyt.tar.gz'),
+        pipeline.targz_extractor(
+            pipeline.html_extractor(errors='replace'),
+        ),
+        pipeline.default_tokenizer(),
+        pipeline.dir_labeler('year'),
+        pipeline.length_filterer(),
+    )
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('nyt.pickle'), _path('nyt.docs.pickle'))
+
 
 def newsgroups():
     """Gets a Corpus containing roughly 20,000 usenet postings from 20
@@ -248,6 +268,7 @@ def newsgroups():
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('newsgroups.pickle'))
 
+
 def amazon_modified(corpus_size=10000000, vocab_size=None, rare=100, run_number=0):
     """Gets a corpus containing a number Amazon product reviews 
     equal to corpus_size, with star ratings. """
@@ -271,8 +292,7 @@ def amazon_modified(corpus_size=10000000, vocab_size=None, rare=100, run_number=
         download_inputer(f'amazon_modified/amazon_modified_{corpus_size}_{run_number}.json.gz'),
         pipeline.gzip_extractor(label_extractor),
         pipeline.stopword_tokenizer(
-            pipeline.default_tokenizer(),
-            open_download('stopwords/english.txt'),
+            pipeline.default_tokenizer()
         ),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
@@ -283,6 +303,110 @@ def amazon_modified(corpus_size=10000000, vocab_size=None, rare=100, run_number=
     corpus_path = _path(f'amazon_modified_{corpus_size}_{run_number}.pickle')
     docs_path = _path(f'amazon_modified_{corpus_size}_{run_number}.docs.pickle')
     return corpus_path, docs_path, p.run(corpus_path, hash_size=vocab_size, docs_path=docs_path)
+
+
+def wikipedia_corrected():
+    """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
+    """
+    label_stream = BufferedStream()
+
+    def hingidy_jingidies(docfile, label_key='nyt'):
+        for i, line in enumerate(docfile):
+            line = line.decode('utf-8')
+            label_stream.append(str(i), label_key)
+            yield pipeline.Text(str(i), line)
+
+    p = pipeline.Pipeline(
+        download_inputer('wikipedia/wikipedia_corrected.txt.gz'),
+        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.default_tokenizer(),
+        pipeline.stream_labeler(label_stream),
+        pipeline.length_filterer(),
+    )
+
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('wikipedia_corrected.pickle'))
+
+
+def wikipedia():
+    """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
+    """
+    label_stream = BufferedStream()
+
+    def hingidy_jingidies(docfile, label_key='nyt'):
+        for i, line in enumerate(docfile):
+            line = line.decode('utf-8')
+            label_stream.append(str(i), label_key)
+            yield pipeline.Text(str(i), line)
+
+    p = pipeline.Pipeline(
+        download_inputer('wikipedia/wikipedia.txt.gz'),
+        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.default_tokenizer(),
+        pipeline.stream_labeler(label_stream),
+        pipeline.length_filterer(),
+    )
+
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('wikipedia.pickle'))
+
+
+def nyt_corrected():
+    """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
+    """
+    label_stream = BufferedStream()
+
+    def hingidy_jingidies(docfile, label_key='nyt'):
+        for i, line in enumerate(docfile):
+            line = line.decode('utf-8')
+            label_stream.append(str(i), label_key)
+            yield pipeline.Text(str(i), line)
+
+    p = pipeline.Pipeline(
+        download_inputer('nyt/nyt_corrected.txt.gz'),
+        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.default_tokenizer(),
+        pipeline.stream_labeler(label_stream),
+        pipeline.length_filterer(),
+    )
+
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('nyt_corrected.pickle'), docs_path='/fslhome/wfearn/compute/.ankura/nyt/nyt_corrected.docs.pickle')
+
+
+def amazon_corrected():
+    """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
+    """
+
+    label_stream = BufferedStream()
+
+    def hingidy_jingidies(docfile, value_key='reviewText', label_key='overall'):
+
+        import json
+
+        for i, line in enumerate(docfile):
+            try:
+                line = json.loads(line.decode('utf-8'))    
+                label_stream.append(str(i), line[label_key])
+            except json.decoder.JSONDecodeError as e:
+                print('Error', e)
+                print('Offending line:', line)
+                sys.stdout.flush()
+                sys.exit(0)
+
+            yield pipeline.Text(str(i), line[value_key])
+
+    p = pipeline.Pipeline(
+        download_inputer('amazon_corrected/amazon_corrected.json.gz'),
+        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.default_tokenizer(),
+        pipeline.stream_labeler(label_stream),
+        pipeline.length_filterer(),
+    )
+
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('amazon_corrected.pickle'), docs_path='/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/amazon_corrected.docs.pickle')
+
 
 def amazon_large(run_number=0, vocab_size=10000):
     """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
@@ -303,18 +427,17 @@ def amazon_large(run_number=0, vocab_size=10000):
     p = pipeline.Pipeline(
         download_inputer('amazon_large/amazon_large.json.gz'),
         pipeline.gzip_extractor(hingidy_jingidies),
-        pipeline.stopword_tokenizer(
-            pipeline.default_tokenizer(),
-            open_download('stopwords/english.txt'),
-        ),
+        pipeline.default_tokenizer(),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
     )
 
     p.tokenizer = pipeline.frequency_tokenizer(p)
-    corpus_path = _path(f'amazon_large_{vocab_size}_{run_number}.pickle')
-    docs_path = _path(f'amazon_large_{vocab_size}_{run_number}.docs.pickle')
-    return corpus_path, docs_path, p.run(corpus_path, hash_size=vocab_size, docs_path=docs_path)
+    #corpus_path = _path(f'amazon_large_{vocab_size}_{run_number}.pickle')
+    #docs_path = _path(f'amazon_large_{vocab_size}_{run_number}.docs.pickle')
+    #return corpus_path, docs_path, p.run(corpus_path, hash_size=vocab_size, docs_path=docs_path)
+    return p.run(_path('amazon_large.pickle'), docs_path='/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/amazon_large.docs.pickle')
+
 
 def amazon_medium():
     """Gets a corpus containing 100,000 Amazon product reviews, with star ratings.
@@ -344,6 +467,7 @@ def amazon_medium():
 
     p.tokenizer = pipeline.frequency_tokenizer(p, 100, 2000)
     return p.run(_path('amazon_medium.pickle'))
+
 
 def amazon():
     """Gets a Corpus containing roughly 40,000 Amazon product reviews, with
@@ -378,6 +502,7 @@ def amazon():
     p.tokenizer = pipeline.frequency_tokenizer(p, 50)
     return p.run(_path('amazon.pickle'))
 
+
 class BufferedStream(object):
 
     def __init__(self):
@@ -393,3 +518,10 @@ class BufferedStream(object):
             val = tup[1]
 
             yield key, val
+
+corpus_dictionary = {
+                        'amazon_corrected' : amazon_corrected,
+                        'amazon_large' : amazon_large,
+                        'nyt' : nyt,
+                        'nyt_corrected' : nyt_corrected,
+                    }

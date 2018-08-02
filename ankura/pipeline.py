@@ -28,6 +28,8 @@ import bs4
 import scipy.sparse
 import numpy as np
 
+import nltk
+
 # POD types used throughout the pipeline process
 
 Text = collections.namedtuple('Text', 'name data')
@@ -106,7 +108,7 @@ def html_extractor(encoding='utf-8', errors='strict'):
     def _extractor(docfile):
         raw = docfile.read().decode(encoding, errors)
         soup = bs4.BeautifulSoup(raw, 'html.parser')
-        text = soup.get_text()
+        text = '\n'.join([p.get_text() for p in soup.find_all('p')])
         text = newline.sub('\n', text)
         text = text.strip()
         yield Text(docfile.name, text)
@@ -154,8 +156,13 @@ def split_tokenizer(delims=string.whitespace):
     """Splits data on delimiting characters. The default delims are
     whitespace characters.
     """
+
+    dashes = re.compile('[-]+')
+    underscore = re.compile('[_]+')
+
     @functools.wraps(split_tokenizer)
     def _tokenizer(data):
+        data = underscore.sub(' ', dashes.sub(' ', data))
         tokens = []
         begin = -1 # Set to -1 when looking for start of token
         for i, char in enumerate(data):
