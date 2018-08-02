@@ -670,7 +670,7 @@ def train_test_split(corpus, num_train=None, num_test=None, random_seed=None, re
         if remove_testonly_words:
             train, test = remove_nonexistent_train_words(train, test)
     except TypeError: # corpus doesn't support random indexing, note this only supports 80/20 splits currently
-        sample_size = num_train
+        sample_size = num_train + num_test
 
         # reservoir sampling
         sample_ids = list()
@@ -683,8 +683,8 @@ def train_test_split(corpus, num_train=None, num_test=None, random_seed=None, re
                 replace_index = np.random.randint(len(sample_ids))
                 sample_ids[replace_index] = i
 
-        train_ids = sample_ids
-        test_ids = list(doc_id_set.difference(set(sample_ids)))
+        train_ids = set(sample_ids[:num_train])
+        test_ids = set(sample_ids[num_train:])
 
         test_docstream_path = f'{save_dir}/{test_name}{vocab_size}.docs.pickle'
         train_docstream_path = f'{save_dir}/{train_name}{vocab_size}.docs.pickle'
@@ -692,9 +692,8 @@ def train_test_split(corpus, num_train=None, num_test=None, random_seed=None, re
         test_docstream = DocumentStream(test_docstream_path)
         train_docstream = DocumentStream(train_docstream_path)
 
-        sample_ids = set(sample_ids)
         for i, doc in enumerate(corpus.documents):
-            if i in sample_ids:
+            if i in train_ids:
                 train_docstream.append(doc)
             else:
                 test_docstream.append(doc)
