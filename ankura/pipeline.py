@@ -152,7 +152,7 @@ def targz_extractor(base_extractor):
 # input a single string, and return a list of TokenLoc.
 
 
-def split_tokenizer(delims=string.whitespace):
+def split_tokenizer(delims=string.whitespace, replace=True):
     """Splits data on delimiting characters. The default delims are
     whitespace characters.
     """
@@ -162,7 +162,8 @@ def split_tokenizer(delims=string.whitespace):
 
     @functools.wraps(split_tokenizer)
     def _tokenizer(data):
-        data = underscore.sub(' ', dashes.sub(' ', data))
+        if replace:
+            data = underscore.sub(' ', dashes.sub(' ', data))
         tokens = []
         begin = -1 # Set to -1 when looking for start of token
         for i, char in enumerate(data):
@@ -197,11 +198,11 @@ def translate_tokenizer(base_tokenizer, table=_LOWER_DELPUNCT_TABLE):
     return _tokenizer
 
 
-def default_tokenizer():
+def default_tokenizer(replace=True):
     """Splits the data on whitespace, lowercases the tokens, and removes
     punctuation. Empty tokens are removed.
     """
-    return translate_tokenizer(split_tokenizer())
+    return translate_tokenizer(split_tokenizer(replace=replace))
 
 
 def regex_tokenizer(base_tokenizer, pattern, repl):
@@ -708,7 +709,7 @@ def train_test_split(corpus, num_train=None, num_test=None, random_seed=None, re
         test = Corpus([corpus.documents[d] for d in test_ids], corpus.vocabulary, corpus.metadata)
         if remove_testonly_words:
             train, test = remove_nonexistent_train_words(train, test)
-    except TypeError: # corpus doesn't support random indexing, note this only supports 80/20 splits currently
+    except TypeError: # corpus doesn't support random indexing
         sample_size = num_train + num_test
 
         # reservoir sampling
@@ -734,7 +735,7 @@ def train_test_split(corpus, num_train=None, num_test=None, random_seed=None, re
         for i, doc in enumerate(corpus.documents):
             if i in train_ids:
                 train_docstream.append(doc)
-            else:
+            elif i in test_ids:
                 test_docstream.append(doc)
 
         train_ids, test_ids = doc_ids[:num_train], doc_ids[num_train:]

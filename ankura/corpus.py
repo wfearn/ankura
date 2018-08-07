@@ -224,17 +224,24 @@ def toy():
 
 
 def nyt():
+    label_stream = BufferedStream()
+
+    def stream_extractor(docfile, label_key='nyt'):
+        for i, line in enumerate(docfile):
+            line = line.decode('utf-8')
+            label_stream.append((str(i), label_key))
+            yield pipeline.Text(str(i), line)
+
     p = pipeline.Pipeline(
-        download_inputer('nyt/nyt.tar.gz'),
-        pipeline.targz_extractor(
-            pipeline.html_extractor(errors='replace'),
-        ),
+        download_inputer('nyt/nyt.txt.gz'),
+        pipeline.gzip_extractor(stream_extractor),
         pipeline.default_tokenizer(),
-        pipeline.dir_labeler('year'),
+        pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
     )
+
     p.tokenizer = pipeline.frequency_tokenizer(p)
-    return p.run(_path('nyt.pickle'), _path('nyt.docs.pickle'))
+    return p.run(_path('nyt.pickle'), docs_path=_path('nyt.docs.pickle'))
 
 
 def newsgroups():
@@ -329,7 +336,7 @@ def wikipedia_corrected():
     """
     label_stream = BufferedStream()
 
-    def hingidy_jingidies(docfile, label_key='nyt'):
+    def stream_extractor(docfile, label_key='nyt'):
         for i, line in enumerate(docfile):
             line = line.decode('utf-8')
             label_stream.append(str(i), label_key)
@@ -337,7 +344,7 @@ def wikipedia_corrected():
 
     p = pipeline.Pipeline(
         download_inputer('wikipedia/wikipedia_corrected.txt.gz'),
-        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.gzip_extractor(stream_extractor),
         pipeline.default_tokenizer(),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
@@ -352,7 +359,7 @@ def wikipedia():
     """
     label_stream = BufferedStream()
 
-    def hingidy_jingidies(docfile, label_key='nyt'):
+    def stream_extractor(docfile, label_key='nyt'):
         for i, line in enumerate(docfile):
             line = line.decode('utf-8')
             label_stream.append(str(i), label_key)
@@ -360,7 +367,7 @@ def wikipedia():
 
     p = pipeline.Pipeline(
         download_inputer('wikipedia/wikipedia.txt.gz'),
-        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.gzip_extractor(stream_extractor),
         pipeline.default_tokenizer(),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
@@ -375,22 +382,22 @@ def nyt_corrected():
     """
     label_stream = BufferedStream()
 
-    def hingidy_jingidies(docfile, label_key='nyt'):
+    def stream_extractor(docfile, label_key='nyt'):
         for i, line in enumerate(docfile):
             line = line.decode('utf-8')
-            label_stream.append(str(i), label_key)
+            label_stream.append((str(i), label_key))
             yield pipeline.Text(str(i), line)
 
     p = pipeline.Pipeline(
         download_inputer('nyt/nyt_corrected.txt.gz'),
-        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.gzip_extractor(stream_extractor),
         pipeline.default_tokenizer(),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
     )
 
     p.tokenizer = pipeline.frequency_tokenizer(p)
-    return p.run(_path('nyt_corrected.pickle'), docs_path='/fslhome/wfearn/compute/.ankura/nyt/nyt_corrected.docs.pickle')
+    return p.run(_path('nyt_corrected.pickle'), docs_path=_path('nyt_corrected.docs.pickle'))
 
 
 def amazon_corrected():
@@ -399,7 +406,7 @@ def amazon_corrected():
 
     label_stream = BufferedStream()
 
-    def hingidy_jingidies(docfile, value_key='reviewText', label_key='overall'):
+    def stream_extractor(docfile, value_key='reviewText', label_key='overall'):
 
         import json
 
@@ -417,7 +424,7 @@ def amazon_corrected():
 
     p = pipeline.Pipeline(
         download_inputer('amazon_corrected/amazon_corrected.json.gz'),
-        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.gzip_extractor(stream_extractor),
         pipeline.default_tokenizer(),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
@@ -426,14 +433,13 @@ def amazon_corrected():
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('amazon_corrected.pickle'), docs_path='/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/amazon_corrected.docs.pickle')
 
-
-def amazon_large(hash_size=0, dir_prefix='/local/amazon_large'):
+def amazon_large_noreplace(dir_prefix='/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/'):
     """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
     """
 
     label_stream = BufferedStream()
 
-    def hingidy_jingidies(docfile, value_key='reviewText', label_key='overall'):
+    def stream_extractor(docfile, value_key='reviewText', label_key='overall'):
 
         import json
 
@@ -445,16 +451,41 @@ def amazon_large(hash_size=0, dir_prefix='/local/amazon_large'):
 
     p = pipeline.Pipeline(
         download_inputer('amazon_large/amazon_large.json.gz'),
-        pipeline.gzip_extractor(hingidy_jingidies),
+        pipeline.gzip_extractor(stream_extractor),
+        pipeline.default_tokenizer(replace=False),
+        pipeline.stream_labeler(label_stream),
+        pipeline.length_filterer(),
+    )
+
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('amazon_large_noreplace.pickle'), docs_path=f'{dir_prefix}amazon_large_noreplace.docs.pickle')
+
+
+def amazon_large(hash_size=0, dir_prefix='/local/amazon_large'):
+    """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
+    """
+
+    label_stream = BufferedStream()
+
+    def stream_extractor(docfile, value_key='reviewText', label_key='overall'):
+
+        import json
+
+        for i, line in enumerate(docfile):
+            line = json.loads(line.decode('utf-8'))
+            label_stream.append((str(i), line[label_key]))
+
+            yield pipeline.Text(str(i), line[value_key])
+
+    p = pipeline.Pipeline(
+        download_inputer('amazon_large/amazon_large.json.gz'),
+        pipeline.gzip_extractor(stream_extractor),
         pipeline.default_tokenizer(),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
     )
 
     p.tokenizer = pipeline.frequency_tokenizer(p)
-    #corpus_path = _path(f'amazon_large_{vocab_size}_{run_number}.pickle')
-    #docs_path = _path(f'amazon_large_{vocab_size}_{run_number}.docs.pickle')
-    #return corpus_path, docs_path, p.run(corpus_path, hash_size=vocab_size, docs_path=docs_path)
     return p.run(_path('amazon_large.pickle'), docs_path='/fslhome/wfearn/compute/amazon_large/amazon_large_corpora/amazon_large.docs.pickle')
 
 
@@ -542,4 +573,7 @@ corpus_dictionary = {
                         'amazon_large' : amazon_large,
                         'nyt' : nyt,
                         'nyt_corrected' : nyt_corrected,
+                        'wikipedia' : wikipedia,
+                        'wikipedia_corrected' : wikipedia_corrected,
+                        'yelp' : yelp,
                     }
