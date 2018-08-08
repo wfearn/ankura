@@ -1,83 +1,59 @@
-import ankura
-from copy import deepcopy
-import random
-import os
-import pickle
 import sys
-import signal
-import time
+import pickle
+import os
+import ankura
 import numpy as np
-import psutil
+from copy import deepcopy
 from collections import namedtuple
 
-TTRatio = namedtuple('TTRatio', 'types tokens')
 PlottingData = namedtuple('PlottingData', 'types tokens std')
-corpus_dict = ankura.corpus.corpus_dictionary
 
-
-def run(corpus_name='yelp', t_size=4000000, iters=5):
-
-    type_set = set()
-    tokens = int(0)
-    types_to_tokens = list()
+def load(filename, sample_size, iterations):
     type_token_dict = dict()
-    print('Retrieving Corpus')
-    corpus = corpus_dict[corpus_name]()    
-    print('Corpus Retrieved')
-
-    print('Getting types and tokens')
-    operation_time = int(0)
-    sys.stdout.flush()
-
-
-    start = time.time()
-    for j in range(iters):
-
-        types_to_tokens.clear() 
-        type_set.clear()
-        tokens = 0
-
-        print('Splitting Corpus')
-        subset, _ = ankura.pipeline.train_test_split(corpus, num_train=t_size, num_test=1, train_name=f'{corpus_name}_{t_size}_train', test_name=f'{corpus_name}_{t_size}_test', save_dir='/fslhome/wfearn/compute/amazon_large')
-        print('Splitting Done')
+    for i in range(iterations):
+        print('Iteration', i)
         sys.stdout.flush()
 
-        #random.shuffle(corpus.documents)
-        for i, doc in enumerate(subset.documents):
-            tokens += len(doc.tokens)
-            type_set.update(set([t.token for t in doc.tokens]))
-            types = len(type_set)
-            types_to_tokens.append(TTRatio(types, tokens))
+        l = list()
+        with open(filename, 'r') as f:
+            for line in f:
+                l.append(line)
 
-            if i % 1000000 == 0 and i is not 0:
-                sofar = time.time()
-                time_so_far = (sofar - start)
-                print('Time taken so far:', time_so_far)
-                print('Average time:', time_so_far / i)
-                sys.stdout.flush()
-            
-        type_token_dict[j] = deepcopy(types_to_tokens)
+        t = ankura.pipeline.default_tokenizer()
 
-    sys.stdout.flush()
-    end = time.time()
-    total_time = end - start
-    print('Total time:', total_time)
-    sys.stdout.flush()
+        print('Shuffling documents')
+        sys.stdout.flush()
+        np.random.shuffle(l)
+        tokens = int(0)
+        types = set()
+        type_token_ratios = list()
 
-    final_type_token = list() 
-    for i in range(len(types_to_tokens)):
-        types = np.mean([type_token_dict[j][i].types for j in range(5)])
-        tokens = np.mean([type_token_dict[j][i].tokens for j in range(5)])
-        std = np.std([type_token_dict[j][i].types for j in range(5)])
+        print('Getting ratio for sample size')
+        sys.stdout.flush()
+        for doc in l[:sample_size]:
+            words = [w.token for w in t(doc)]
+            tokens += len(words)
+            types.update(set(words))
+            type_token_ratios.append((len(types), tokens))
 
-        final_type_token.append(PlottingData(types, tokens, std))
+        type_token_dict[i] = deepcopy(type_token_ratios)
+    
+    final_type_token = list()
+    for i in range(len(type_token_ratios)):
+        avg_types = np.mean([type_token_dict[j][i][0] for j in range(iterations)])
+        avg_tokens = np.mean([type_token_dict[j][i][1] for j in range(iterations)])
+        std = np.mean([type_token_dict[j][i][1] for j in range(iterations)])
 
-    print('Types and tokens done, printing results')
-    with open(f'/fslhome/wfearn/ankura/{corpus_name}_type_token.pickle', 'wb') as f:
+        final_type_token.append(PlottingData(avg_types, avg_tokens, std))
+
+    corpus_path, _ = os.path.splitext(filename)
+    corpus_name = corpus_path.split('/')[-1]
+    with open(f'{corpus_name}_{sample_size}_{iterations}.pickle', 'wb') as f:
         pickle.dump(final_type_token, f)
 
+
 if __name__ == '__main__':
-    corpus_name = sys.argv[1]
-    training_size = int(sys.argv[2])
+    filename = sys.argv[1]
+    sample_size = int(sys.argv[2])
     iterations = int(sys.argv[3])
-    run(corpus_name=corpus_name, t_size=training_size, iters=iterations)
+    load(filename, sample_size, iterations)
