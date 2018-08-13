@@ -377,6 +377,29 @@ def wikipedia():
     return p.run(_path('wikipedia.pickle'))
 
 
+def na_news():
+    """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
+    """
+    label_stream = BufferedStream()
+
+    def stream_extractor(docfile, label_key='news'):
+        for i, line in enumerate(docfile):
+            line = line.decode('utf-8')
+            label_stream.append((str(i), label_key))
+            yield pipeline.Text(str(i), line)
+
+    p = pipeline.Pipeline(
+        download_inputer('na_news/ap_news_summary.txt.gz'),
+        pipeline.gzip_extractor(stream_extractor),
+        pipeline.default_tokenizer(),
+        pipeline.stream_labeler(label_stream),
+        pipeline.length_filterer(),
+    )
+
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('na_news.pickle'), docs_path=_path('na_news.docs.pickle'))
+
+
 def nyt_corrected():
     """Gets a corpus containing ~80 million Amazon product reviews, with star ratings.
     """
@@ -452,7 +475,7 @@ def amazon_large_noreplace(dir_prefix='/fslhome/wfearn/compute/amazon_large/amaz
     p = pipeline.Pipeline(
         download_inputer('amazon_large/amazon_large.json.gz'),
         pipeline.gzip_extractor(stream_extractor),
-        pipeline.default_tokenizer(replace=False),
+        pipeline.default_tokenizer(),
         pipeline.stream_labeler(label_stream),
         pipeline.length_filterer(),
     )

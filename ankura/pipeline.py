@@ -152,18 +152,13 @@ def targz_extractor(base_extractor):
 # input a single string, and return a list of TokenLoc.
 
 
-def split_tokenizer(delims=string.whitespace, replace=True):
+def split_tokenizer(delims=string.whitespace):
     """Splits data on delimiting characters. The default delims are
     whitespace characters.
     """
 
-    dashes = re.compile('[-]+')
-    underscore = re.compile('[_]+')
-
     @functools.wraps(split_tokenizer)
     def _tokenizer(data):
-        if replace:
-            data = underscore.sub(' ', dashes.sub(' ', data))
         tokens = []
         begin = -1 # Set to -1 when looking for start of token
         for i, char in enumerate(data):
@@ -198,11 +193,11 @@ def translate_tokenizer(base_tokenizer, table=_LOWER_DELPUNCT_TABLE):
     return _tokenizer
 
 
-def default_tokenizer(replace=True):
+def default_tokenizer():
     """Splits the data on whitespace, lowercases the tokens, and removes
     punctuation. Empty tokens are removed.
     """
-    return translate_tokenizer(split_tokenizer(replace=replace))
+    return translate_tokenizer(split_tokenizer())
 
 
 def regex_tokenizer(base_tokenizer, pattern, repl):
