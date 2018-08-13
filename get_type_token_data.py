@@ -42,7 +42,7 @@ def load(filename, sample_size, iterations):
     for i in range(len(type_token_ratios)):
         avg_types = np.mean([type_token_dict[j][i][0] for j in range(iterations)])
         avg_tokens = np.mean([type_token_dict[j][i][1] for j in range(iterations)])
-        std = np.mean([type_token_dict[j][i][1] for j in range(iterations)])
+        std = np.std([type_token_dict[j][i][1] for j in range(iterations)])
 
         final_type_token.append(PlottingData(avg_types, avg_tokens, std))
 
