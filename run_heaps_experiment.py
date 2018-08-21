@@ -7,63 +7,26 @@ import random
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import SVC
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 from collections import namedtuple
+from collections import defaultdict
 import time
 import os
 import sys
 import pickle
 import argparse
+from heaps_utils import *
 
-
-AM_LRG = 'amazon_large'
-NEWS = 'na_news'
-NAIVE_BAYES = 'nb'
-SVM = 'svm'
-AM_LRG_C = f'{AM_LRG}_corrected'
-AM_LRG_TEST = f'{AM_LRG}_test'
-NEWS_C = f'{NEWS}_corrected'
-HOME_DIR = os.environ['HOME']
-AM_LRG_DIR = os.path.join(HOME_DIR, f'compute/{AM_LRG}')
-NEWS_DIR = os.path.join(HOME_DIR, f'compute/.ankura/{NEWS}')
-AM_LRG_FILE = f'{AM_LRG}_text.json'
-AM_LRG_TEST_FILE = f'{AM_LRG_TEST}.json'
-NEWS_FILE = f'{NEWS}.txt'
-AM_LRG_CORRECTED_FILE = f'{AM_LRG_C}.json'
-NEWS_CORRECTED_FILE = f'{NEWS_C}.txt'
-AM_LRG_FILEPATH = os.path.join(AM_LRG_DIR, AM_LRG_FILE)
-AM_LRG_CORRECTED_FILEPATH = os.path.join(AM_LRG_DIR, AM_LRG_CORRECTED_FILE)
-AM_LRG_TEST_FILEPATH = os.path.join(AM_LRG_DIR, AM_LRG_TEST_FILE)
-NEWS_FILEPATH = os.path.join(NEWS_DIR, NEWS_FILE)
-NEWS_CORRECTED_FILEPATH = os.path.join(NEWS_DIR, NEWS_CORRECTED_FILE)
-ANK_CORPUS_DICT = ankura.corpus.corpus_dictionary
-
-FILE_CORPUS_DICT = {
-                        AM_LRG : AM_LRG_FILEPATH,
-                        NEWS : NEWS_FILEPATH, 
-                        NEWS_C : NEWS_CORRECTED_FILEPATH,
-                        AM_LRG_C : AM_LRG_CORRECTED_FILEPATH,
-                        AM_LRG_TEST : AM_LRG_TEST_FILEPATH,
-                   }
-
-SK_MODEL_DICT =  {
-                    NAIVE_BAYES : MultinomialNB,
-                    SVM : SVC,
-                 }
-
-SK_LEARN_MODELS = {'nb', 'svm'}
-
-
-ExperimentResults = namedtuple('ExperimentResults', 'corpus model seed hash rare train test accuracy all_time train_time test_time vocab_time')
 
 def get_sysargs():
     parser = argparse.ArgumentParser(description='Process arguments for the experiment the user wants to run.')
-    parser.add_argument('--corpus', type=str, required=True, help='the corpus the experiment will use', choices=['amazon_large', 'na_news', 'twitter', 'amazon_large_corrected', 'amazon_large_test'])
+    parser.add_argument('--corpus', type=str, required=True, help='the corpus the experiment will use', choices=['amazon_large', 'amazon_large_sample', 'na_news', 'twitter', 'amazon_large_corrected', 'amazon_large_test', 'yelp'])
     parser.add_argument('--model', type=str, required=True, help='ML model used by experiment', choices=['svm', 'nb', 'ankura'])
     parser.add_argument('--seed', type=int, default=0, nargs='?', help='seed for the random number generator')
     parser.add_argument('--hash', type=int, default=0, help='final hashed vocabulary size')
     parser.add_argument('--rare', type=int, default=0, help='rare word filter')
-    parser.add_argument('--udreplace', help='whether to replace \'_\' and \'-\' with \' \'')
-    parser.add_argument('--nremoval', help='whether to remove numbers')
+    parser.add_argument('--udreplace', dest='udreplace', action='store_true', help='whether to replace \'_\' and \'-\' with \' \'')
+    parser.add_argument('--nremoval', dest='nremoval', action='store_true', help='whether to remove numbers')
     parser.add_argument('--ntrain', type=int, help='number of documents in the training set')
     parser.add_argument('--ntest', type=int, help='number of documents in the test set')
 
@@ -104,18 +67,25 @@ def get_doc_target(doc_list, is_text, vbuilder, tokenizer, end, start=None):
 
     return text_list, target_list
 
+def create_doc_topic_matrix(docs, num_topics, topics, theta_attr, label):
+    doc_thetas = ankura.topic.gensim_assign(docs, topics, theta_attr=theta_attr)
+    matrix = np.zeros((len(docs.documents), num_topics))
+
+    for i, doc in enumerate(docs.documents):
+        matrix[i, :] = np.log(doc_thetas[i] + 1e-30)
+
+    target = [doc.metadata[label] for doc in docs.documents]
+
+    return matrix, target
+
 
 def run_experiment(args):
     overall_time_start = time.time()
     print('Running experiment')
     if args.model in SK_LEARN_MODELS: 
+
         corpus = get_sklearn_corpus(args.corpus)
-
-        tokenizer = ankura.pipeline.split_tokenizer()
-        if args.udreplace: tokenizer = ankura.pipeline.regex_tokenizer(tokenizer, '[_|-]+', ' ')
-        if args.nremoval: tokenizer = ankura.pipeline.regex_tokenizer(tokenizer, '[\d]+', '')
-        tokenizer = ankura.pipeline.translate_tokenizer(tokenizer)
-
+        tokenizer = create_tokenizer(args)
         vb = HashedVocabBuilder(args.hash) if args.hash else VocabBuilder()
 
         print('Setting up document list')
@@ -130,7 +100,7 @@ def run_experiment(args):
         train, train_target = get_doc_target(doc_list, is_text, vb, tokenizer, args.ntrain)
         test, test_target = get_doc_target(doc_list, is_text, vb, tokenizer, args.ntrain + args.ntest, start=args.ntrain)
 
-        v = TfidfVectorizer()
+        v = TfidfVectorizer(min_df=args.rare)
 
         print('Preprocessing text')
         vocab_start = time.time()
@@ -155,19 +125,30 @@ def run_experiment(args):
     else:
         corpus = get_ankura_corpus(args)
         print('Splitting corpus')
-        split, test = ankura.pipeline.train_test_split(corpus, random_seed=args.seed, num_train=args.ntrain, num_test=args.ntest, vocab_size=args.hash)
-    
+        split, test = ankura.pipeline.train_test_split(corpus, test_name=f'{args.corpus}_{args.model}_{args.ntest}_test', train_name=f'{args.corpus}_{args.model}_trainp1_split', random_seed=args.seed, num_train=args.ntrain + 1, num_test=args.ntest, vocab_size=args.hash)
+        train, _ = ankura.pipeline.train_test_split(split, test_name=f'{args.corpus}_{args.model}_1_nan', train_name=f'{args.corpus}_{args.model}_{args.ntrain}_train', random_seed=args.seed, num_train=args.ntrain, num_test=1)
 
-    """   Process for ankura
-          need a way to run tokenizer based on parameters from args
-            load corpus
-            build Q
-            get topics
-            topic assignments
-            build doc/topic matrix
-            load doc/topic into LogisticRegression
-            score model
-    """
+
+        doc_label = LABEL_DICT[args.corpus]
+        vocab_start = time.time()
+        Q = ankura.anchor.build_supervised_cooccurrence(train, doc_label, range(len(train.documents)))
+        vocab_end = time.time()
+
+        anchors = ankura.anchor.gram_schmidt_anchors(train, Q, NUM_TOPICS, doc_threshold=100)
+        topics = ankura.anchor.recover_topics(Q, anchors, 1e-5)
+
+        train_matrix, train_target = create_doc_topic_matrix(train, NUM_TOPICS, topics, 'z', doc_label)
+        test_matrix, test_target = create_doc_topic_matrix(test, NUM_TOPICS, topics, 'z', doc_label)
+
+        lr =  LogisticRegression()
+
+        train_start = time.time()
+        lr.fit(train_matrix, train_target)
+        train_end = time.time()
+
+        test_start = time.time()
+        accuracy = lr.score(test_matrix, test_target)
+        test_end = time.time()
 
     overall_time_end = time.time()
 
@@ -175,8 +156,12 @@ def run_experiment(args):
     train_time = train_end - train_start
     test_time = test_end - test_start
     vocab_time = vocab_end - vocab_start
+
+    vocabulary = len(vb.tokens) if args.model in SK_LEARN_MODELS else len(corpus.vocabulary)
     
-    er = ExperimentResults(args.corpus, args.model, args.seed, args.hash, args.rare, args.ntrain, args.ntest, accuracy, all_time, train_time, test_time, vocab_time)
+    er = ExperimentResults(args.corpus, args.model, args.seed, args.hash, args.rare, args.ntrain, args.ntest, accuracy, vocabulary, all_time, train_time, test_time, vocab_time)
+
+    print('Vocabulary Size:', vocabulary)
 
     with open(f'{args.corpus}_{args.model}_seed{args.seed}_hash{args.hash}_rare{args.rare}_train{args.ntrain}.pickle', 'wb') as save:
         pickle.dump(er, save)
@@ -185,4 +170,3 @@ def run_experiment(args):
 if __name__ == '__main__':
     args = get_sysargs()
     run_experiment(args)
-
