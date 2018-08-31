@@ -14,7 +14,7 @@ def get_sysargs():
     parser.add_argument('--corpus', type=str, required=True, help='corpus the calculation will use', choices=['amazon_large', 'amazon_large_sample', 'amazon_large_corrected', 'amazon_large_symspell_nopunct', 'amazon_large_symspell_udreplace', 'amazon_large_symspell', 'amazon_large_symspell_wordseg', 'na_news', 'na_news_symspell', 'na_news_symspell_wordseg'])
     parser.add_argument('--iterations', type=int, default=5, help='Number of times to filter through corpus and take sample')
     parser.add_argument('--sample_size', type=int, required=True, help='Size of sample to take from corpus')
-    parser.add_argument('--udreplace', type=bool, default=False, help='whether to replace \'_\' and \'-\' with \' \'')
+    parser.add_argument('--udreplace', dest='udreplace', action='store_true', help='whether to replace \'_\' and \'-\' with \' \'')
     parser.add_argument('--nopunct', dest='nopunct', action='store_true', help='whether to remove punctuation')
     parser.add_argument('--lower', dest='lower', action='store_true', help='whether to lowercase the tokens')
     parser.add_argument('--nremoval', dest='nremoval', action='store_true', help='whether to remove numbers')
