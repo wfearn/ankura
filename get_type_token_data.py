@@ -1,37 +1,48 @@
 import sys
 import time
+import gzip
 import pickle
 import os
 import ankura
+import psutil
 import numpy as np
 from copy import deepcopy
 from collections import namedtuple
 from ankura.heaps_utils import *
 import argparse
+import json
+import os
 
-def get_sysargs():
-    parser = argparse.ArgumentParser(description='Process arguments for type token calculation the user wants to run')
-    parser.add_argument('--corpus', type=str, required=True, help='corpus the calculation will use', choices=['amazon_large', 'amazon_large_sample', 'amazon_large_corrected', 'amazon_large_symspell_nopunct', 'amazon_large_symspell_udreplace', 'amazon_large_symspell', 'amazon_large_symspell_wordseg', 'na_news', 'na_news_symspell', 'na_news_symspell_wordseg'])
-    parser.add_argument('--iterations', type=int, default=5, help='Number of times to filter through corpus and take sample')
-    parser.add_argument('--sample_size', type=int, required=True, help='Size of sample to take from corpus')
-    parser.add_argument('--udreplace', dest='udreplace', action='store_true', help='whether to replace \'_\' and \'-\' with \' \'')
-    parser.add_argument('--nopunct', dest='nopunct', action='store_true', help='whether to remove punctuation')
-    parser.add_argument('--lower', dest='lower', action='store_true', help='whether to lowercase the tokens')
-    parser.add_argument('--nremoval', dest='nremoval', action='store_true', help='whether to remove numbers')
-    return parser.parse_args()
+def get_json_text(text, tag='reviewText'):
+    line = json.loads(text)
+    return line[tag]
+
+
+def get_plaintext(text):
+    return text
+
+
+filext_dict = {
+                'json' : get_json_text,
+                'txt' : get_plaintext,
+              }
 
 def load(args):
 
-    filename = get_corpus_file(args)
+    process = psutil.Process(os.getpid())
+    ext = EXT_DICT[args.corpus]
+    filename = get_corpus_file(args, ext=ext)
     print('Filename is:', filename)
 
+    text_retriever = filext_dict[ext]
+
     l = list()
-    with open(filename, 'r') as f:
+    with gzip.GzipFile(fileobj=open(filename, 'rb')) as f:
         for line in f:
-            l.append(line)
+            l.append(text_retriever(line.decode('utf-8')))
 
     type_token_dict = dict()
-    t = create_tokenizer(args)
+    t = ankura.pipeline.split_tokenizer()
 
     for i in range(args.iterations):
         print('Iteration', i)
@@ -54,7 +65,7 @@ def load(args):
             if not j % 1000000 and j:
                 intermediary = time.time()
                 time_until_now = intermediary - start
-                print(int(j/1000000), 'million docs')
+                print(int(j / 1000000), 'million docs')
                 print('Time until now:', time_until_now)
                 print('Average time:', (time_until_now / j))
                 sys.stdout.flush()
@@ -92,4 +103,8 @@ def load(args):
 
 if __name__ == '__main__':
     args = get_sysargs()
+    print('Udreplace:', args.udreplace)
+    print('Nremoval:', args.nremoval)
+    print('Lower:', args.lower)
+    print('Nopunct:', args.nopunct)
     load(args)

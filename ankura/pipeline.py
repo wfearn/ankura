@@ -27,8 +27,10 @@ import time
 import bs4
 import scipy.sparse
 import numpy as np
+from . import corpus
 
 import nltk
+from nltk.stem.snowball import SnowballStemmer
 
 # POD types used throughout the pipeline process
 
@@ -173,7 +175,6 @@ def split_tokenizer(delims=string.whitespace):
         return tokens
     return _tokenizer
 
-
 _LOWER_DELPUNCT_TABLE = str.maketrans(string.ascii_letters,
                                       string.ascii_lowercase * 2,
                                       string.punctuation)
@@ -198,6 +199,32 @@ def default_tokenizer():
     punctuation. Empty tokens are removed.
     """
     return translate_tokenizer(split_tokenizer())
+
+
+def stem_tokenizer(base_tokenizer):
+    """Transforms the output of another tokenizer by replacing all characters which
+    match a regular expression. 
+    """
+    stemmer = SnowballStemmer("english")
+    @functools.wraps(stem_tokenizer)
+    def _tokenizer(data):
+        tokens = base_tokenizer(data)
+        tokens = [TokenLoc(stemmer.stem(t.token), t.loc) for t in tokens];
+        return tokens
+    return _tokenizer
+
+
+def sub_tokenizer(base_tokenizer, pattern, repl):
+    """Transforms the output of another tokenizer by replacing all characters which
+    match a regular expression. 
+    """
+    sub_re = re.compile(pattern)
+    @functools.wraps(sub_tokenizer)
+    def _tokenizer(data):
+        tokens = base_tokenizer(data)
+        tokens = [TokenLoc(sub_re.sub(repl, t.token), t.loc) for t in tokens if sub_re.sub(repl, t.token)]
+        return tokens
+    return _tokenizer
 
 
 def regex_tokenizer(base_tokenizer, pattern, repl):
@@ -309,6 +336,25 @@ def frequency_tokenizer(pipeline, rare=None, common=None):
             tokenizer = _init()
         return tokenizer(data)
     return _tokenizer
+
+_LOWER_TABLE = str.maketrans(string.ascii_letters,
+                             string.ascii_lowercase * 2)
+
+_DELPUNCT_TABLE = str.maketrans(string.ascii_letters,
+                                string.ascii_letters,
+                                string.punctuation)
+
+
+def create_tokenizer(sysargs):
+    t = split_tokenizer()
+    if sysargs.udreplace: t = sub_tokenizer(t, '[_|-]+', ' ')
+    if sysargs.nremoval: t = sub_tokenizer(t, '[\d]+', '')
+    if sysargs.nopunct: t = translate_tokenizer(t, table=_DELPUNCT_TABLE)
+    if sysargs.lower: t = translate_tokenizer(t, table=_LOWER_TABLE)
+    if sysargs.stop: t = stopword_tokenizer(t, corpus.open_download('stopwords/english.txt'))
+    if sysargs.stem: t = stem_tokenizer(t)
+
+    return t
 
 
 # Labelers are callables which generate metadata from a Text name. Typically
