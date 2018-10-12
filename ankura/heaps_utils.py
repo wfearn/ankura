@@ -39,6 +39,7 @@ EXT_DICT = {
                 AM_LRG : 'json',
                 AM_LRG_SAMPLE : 'json',
                 NEWS_SAMPLE : 'txt',
+                REDDIT : 'json',
            }
 
 SK_MODEL_DICT =  {

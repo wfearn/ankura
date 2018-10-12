@@ -594,9 +594,11 @@ class BufferedStream(object):
 corpus_dictionary = {
                         'amazon_corrected' : amazon_corrected,
                         'amazon_large' : amazon_large,
+                        'amazon_large_sample' : amazon_large_sample,
                         'nyt' : nyt,
                         'nyt_corrected' : nyt_corrected,
                         'wikipedia' : wikipedia,
                         'wikipedia_corrected' : wikipedia_corrected,
                         'yelp' : yelp,
+                        'na_news' : na_news,
                     }

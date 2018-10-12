@@ -344,6 +344,19 @@ _DELPUNCT_TABLE = str.maketrans(string.ascii_letters,
                                 string.ascii_letters,
                                 string.punctuation)
 
+def stopword_skipper(stopwords=corpus.open_download('stopwords/english.txt'), strip=True):
+    """Transforms the output of another tokenizer by removing all tokens which
+    appear in a stopword list. The optional strip parameter (default true)
+    indicates whether the tokens in the stopword list should have whitespace
+    stripped.
+    """
+    stopword_set = _tokenset(stopwords, strip)
+    @functools.wraps(stopword_skipper)
+    def _skipper(token):
+        if token.strip().translate(_LOWER_DELPUNCT_TABLE) in stopword_set: return True
+        else: return False
+    return _skipper
+
 
 def create_tokenizer(sysargs):
     t = split_tokenizer()
