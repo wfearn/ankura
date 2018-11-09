@@ -223,6 +223,24 @@ def toy():
     p.tokenizer = pipeline.frequency_tokenizer(p)
     return p.run(_path('toy.pickle'))
 
+
+def plato():
+    p = pipeline.Pipeline(
+            download_inputer('plato/plato.tar.gz'),
+            pipeline.targz_extractor(
+                pipeline.whole_extractor()
+            ),
+            pipeline.default_tokenizer(),
+            pipeline.composite_labeler(
+                pipeline.title_labeler('id'),
+            ),
+            pipeline.length_filterer(),
+    )
+
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('plato.pickle'))
+
+
 def newsgroups():
     """Gets a Corpus containing roughly 20,000 usenet postings from 20
     different newsgroups in the early 1990's.
