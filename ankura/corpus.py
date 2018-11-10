@@ -228,7 +228,7 @@ def plato():
     p = pipeline.Pipeline(
             download_inputer('plato/plato.tar.gz'),
             pipeline.targz_extractor(
-                pipeline.whole_extractor()
+                pipeline.split_extractor()
             ),
             pipeline.default_tokenizer(),
             pipeline.composite_labeler(
