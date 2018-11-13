@@ -224,6 +224,23 @@ def toy():
     return p.run(_path('toy.pickle'))
 
 
+def ulysses():
+    p = pipeline.Pipeline(
+            download_inputer('ulysses/ulysses.tar.gz'),
+            pipeline.targz_extractor(
+                pipeline.split_extractor(delim='\r\n\r\n')
+            ),
+            pipeline.default_tokenizer(),
+            pipeline.composite_labeler(
+                pipeline.title_labeler('id'),
+            ),
+            pipeline.length_filterer(),
+    )
+
+    p.tokenizer = pipeline.frequency_tokenizer(p)
+    return p.run(_path('ulysses.pickle'))
+
+
 def plato():
     p = pipeline.Pipeline(
             download_inputer('plato/plato.tar.gz'),
